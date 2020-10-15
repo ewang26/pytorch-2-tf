@@ -1,1 +1,1 @@
-from models import get_model_arch
+from .model_arch import get_model_arch
