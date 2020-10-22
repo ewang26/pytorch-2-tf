@@ -7,6 +7,7 @@ import torch.nn as nn
 import numpy as np
 
 from models import get_model_arch
+from module_as_dict import module_to_dict
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--in_path', type=str, help='path to .pth file/.pth.tar file')
@@ -72,28 +73,11 @@ def model_arch_conversion(arch_string, out_path):
     model_arch_list = []
 
     for module in enumerate(model_arch.modules()):
-        if isinstance(module, nn.Conv2d):
-            model_arch_list.append({
-                        'name': module.__class__.__name__,
-                        'in_channels': module.in_channels,
-                        'out_channels': module.out_channels,
-                        'kernel_size': module.kernel_size,
-                        'stride': module.stride,
-                        'padding': module.padding,
-                    })
-        elif isinstance(module, nn.BatchNorm2d):
-            model_arch_list.append({
-                        'name': module.__class__.__name__
-                    })
-        elif isinstance(module, nn.Linear):
-            model_arch_list.append({
-                        'name': module.__class__.__name__,
-                        'in_features': module.in_features,
-                        'out_features': module.out_features,
-                        'bias': module.bias,
-                    })
-        else:
+        module_dict = module_to_dict(module)
+        if module_dict is None:
             return NotImplementedError('A module within your model is not supported.')
+
+        model_arch_list.append(module_dict)
 
     model_arch_dict = {
             'name': model_arch.__class__.__name__,
@@ -105,8 +89,3 @@ def model_arch_conversion(arch_string, out_path):
         json.dump(model_arch_dict, f)
 
 model_arch_conversion(arch, out_path)
-
-
-
-
-
