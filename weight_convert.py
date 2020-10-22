@@ -1,4 +1,5 @@
 import argparse
+import os 
 import json
 import tqdm
 import torch
@@ -35,6 +36,12 @@ def pytorch_weights_to_tf_weights(weight_dict):
     '''
     Converts PyTorch weight format to TensorFlow weight format, as PyTorch
     uses (num, channels, height, width) format while TensorFlow uses (num, height, width, channels)
+    
+    Args:
+        weight_dict: a dictionary containing the pretrained weights of the PyTorch model
+    
+    Returns:
+        tf_weight_dict: a dictionary containing the weights in TensorFlow format
     '''
     tf_weight_dict = {}
     for name, weight in weight_dict.items():
@@ -48,9 +55,18 @@ def pytorch_weights_to_tf_weights(weight_dict):
             tf_weight_dict[name] = weight
         else:
             tf_weight_dict[name] = weight
-    return weight_dict
+    return tf_weight_dict
 
 def model_arch_conversion(arch_string, out_path):
+    '''
+    Takes in the name of a predefined PyTorch model, extracts the architecture of the model, and dumps the model information in a JSON file defined at out_path/model_arch.json
+
+    Args:
+        arch_string: the name of the model to convert
+        out_path: path to write the output JSON file
+    Returns:
+        None
+    '''
     model_arch = get_model_arch(arch_string)
 
     model_arch_list = []
@@ -63,7 +79,7 @@ def model_arch_conversion(arch_string, out_path):
                         'out_channels': module.out_channels,
                         'kernel_size': module.kernel_size,
                         'stride': module.stride,
-                        'padding': x.padding,
+                        'padding': module.padding,
                     })
         elif isinstance(module, nn.BatchNorm2d):
             model_arch_list.append({
@@ -79,12 +95,14 @@ def model_arch_conversion(arch_string, out_path):
         else:
             return NotImplementedError('A module within your model is not supported.')
 
-    print({
+    model_arch_dict = {
             'name': model_arch.__class__.__name__,
             'arch': model_arch_list,
-        })
+        }
 
-
+    print(model_arch_dict)
+    with open(os.path.join(out_path, 'model_arch.json'), 'w') as f:
+        json.dump(model_arch_dict, f)
 
 model_arch_conversion(arch, out_path)
 

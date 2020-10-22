@@ -1,6 +1,15 @@
 import torchvision.models as models
 
 def get_model_arch(model_str):
+    '''
+    Returns the appropriate PyTorch model for a given model name
+
+    Args:
+        model_str: a string describing the model to return
+    
+    Returns:
+        the needed torchvision.models pretrained model
+    '''
     if model_str == 'resnet18':
         return models.resnet18(pretrained=True)
     elif model_str == 'alexnet':

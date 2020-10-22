@@ -13,3 +13,7 @@ Thus, it's useful to be able to convert trained PyTorch model checkpoints to Ten
 ## Dependencies
 
 Pytorch-2-tf uses `argparse`, which is a parser for command-line options, arguments, and sub-commands; `json`, a data-interchange format; `tqdm`, a progress bar for Python; `torch`, an open source machine learning library; and `numpy`, a library that supports large, multi-dimensional arrays and matrices.
+
+## Contributing
+
+See `CONTRIBUTING.md`.
