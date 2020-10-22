@@ -1,5 +1,5 @@
 import argparse
-import os 
+import os
 import json
 import tqdm
 import torch
@@ -37,10 +37,10 @@ def pytorch_weights_to_tf_weights(weight_dict):
     '''
     Converts PyTorch weight format to TensorFlow weight format, as PyTorch
     uses (num, channels, height, width) format while TensorFlow uses (num, height, width, channels)
-    
+
     Args:
         weight_dict: a dictionary containing the pretrained weights of the PyTorch model
-    
+
     Returns:
         tf_weight_dict: a dictionary containing the weights in TensorFlow format
     '''
