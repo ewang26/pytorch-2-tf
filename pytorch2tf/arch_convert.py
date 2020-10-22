@@ -49,6 +49,36 @@ def model_arch_conversion(arch_string, out_path='~/.pytorch2tf'):
                         'out_features': module.out_features,
                         'bias': module.bias,
                     })
+
+        # dropout layer            
+        elif isinstance(module, nn.Dropout2d):
+            model_arch_list.append({
+                        'name': module.__class__.__name__,
+                        'p': module.p,
+                        'inplace': module.inplace,
+                    })
+        
+        # sparse
+        elif isinstance(module, nn.Embedding):
+            model_arch_list.append({
+                        'name': module.__class__.__name__,
+                        'num_embeddings': module.num_embeddings,
+                        'embedding_dim': module.embedding_dim,
+                        'padding_idx': module.padding_idx,
+                        'max_norm': module.max_norm,
+                        'norm_type': module.norm_type,
+                        'scale_grad_by_freq': module.scale_grad_by_freq,
+                        'sparse': module.sparse,
+                    })
+        
+        # distance
+        elif isinstance(module, nn.CosineSimilarity):
+            model_arch_list.append({
+                        'name': module.__class__.__name__,
+                        'dim': module.dim,
+                        'eps': module.eps,
+                    })
+
         else:
             return NotImplementedError('A module within your model is not supported.')
 
