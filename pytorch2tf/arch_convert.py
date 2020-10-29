@@ -10,7 +10,7 @@ import numpy as np
 import tensorflow as tf
 
 from models import get_model_arch
-from
+from models import create_tf_layer_from_name
 
 def model_arch_conversion(arch_string, out_path='~/.pytorch2tf'):
     '''
@@ -50,14 +50,14 @@ def model_arch_conversion(arch_string, out_path='~/.pytorch2tf'):
                         'bias': module.bias,
                     })
 
-        # dropout layer            
+        # dropout layer
         elif isinstance(module, nn.Dropout2d):
             model_arch_list.append({
                         'name': module.__class__.__name__,
                         'p': module.p,
                         'inplace': module.inplace,
                     })
-        
+
         # sparse
         elif isinstance(module, nn.Embedding):
             model_arch_list.append({
@@ -70,7 +70,7 @@ def model_arch_conversion(arch_string, out_path='~/.pytorch2tf'):
                         'scale_grad_by_freq': module.scale_grad_by_freq,
                         'sparse': module.sparse,
                     })
-        
+
         # distance
         elif isinstance(module, nn.CosineSimilarity):
             model_arch_list.append({
@@ -99,33 +99,151 @@ def model_arch_conversion(arch_string, out_path='~/.pytorch2tf'):
 
     return model_arch_dict
 
-def tf_model_from_dict(in_path, out_path, weight_dict):
+
+class TFfromTorchNet:
     '''
-    Takes in a JSON file defining a given model and a dictionary containing
-    the weights of the model and generates a TensorFlow model in SavedModel format
+    Wrapper class to construct a TensorFlow model from the saved PyTorch weights and a JSON file describing the model configuration.
 
-    Args:
-        in_path: file path to the JSON file defining the model architecture
-        out_path: file path to export the converted TF model in SavedModel format
-        weight_dict: a dictionary containing the weights for the model
-
-    Returns:
-        None
+    Attributes:
+        graph: the computational graph of the model
+        input_shape: the shape of the input tensors the model accepts
+        n_classes: number of output classes for the model
     '''
 
-    assert os.path.exists(in_path), 'path to the model definition does not exist!'
+    def __init__(self, path, input_shape=None, output_classes=100):
+        self.graph = tf.Graph()
+        self.input_shape = input_shape
+        self.n_classes = output_classes
 
-    with open(os.path.join(in_path, 'model_arch.json'), 'r') as f:
-        model_arch_dict = json.load(f)
+        self._path = path
+        assert os.path.exists(path), 'path to the model definition does not exist!'
+        if self._path.endswith('json'):
+            self.net_config = json.load(open(self._path, 'r'))
+            self._path = '/'.join(self._path.split('/')[:-1])
+        else:
+            self.net_config = json.load(open(os.path.join(self._path, 'model_arch.json'), 'r'))
 
-    for i, layer_attr in enumerate(model_arch_dict):
-        # get the ith weight in the weight dictionary
-        weight = weight_dict[list(weight_dict.keys())[i]]
-        layer = create_tf_layer_from_name(layer_attr, weight)
+        self._logs_path, self._save_path = None, None
 
-        #TODO add each layer to the TF computational graph or something
+        with self.graph.as_default():
+            self._define_inputs()
+            logits = self.build()
+            with tf.variable_scope('L2_Loss'):
+                l2_loss = tf.add_n([tf.nn.l2_loss(var) for var in tf.trainable_variables()])
 
+            prediction = logits
+            # losses
+            cross_entropy = tf.reduce_mean(
+                tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self.labels)
+            )
+            self.cross_entropy = cross_entropy
 
+            correct_prediction = tf.equal(
+                tf.argmax(prediction, 1),
+                tf.argmax(self.labels, 1)
+            )
+            self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+            # optimizer and train step
+            optimizer = tf.train.MomentumOptimizer(self.learning_rate, momentum=0.9, use_nesterov=True)
+            self.train_step = optimizer.minimize(cross_entropy + l2_loss * 4e-5)
+
+            self.global_variables_initializer = tf.global_variables_initializer()
+            self._count_trainable_params()
+            self.saver = tf.train.Saver()
+        self._initialize_session()
+
+    def save_path(self):
+        '''
+        Initializes the save_path to save the model to
+        Args:
+            None
+        Returns:
+            None
+        '''
+        if self._save_path is None:
+            save_path = '%s/checkpoint' % self._path
+            os.makedirs(save_path, exist_ok=True)
+            save_path = os.path.join(save_path, 'model.ckpt')
+            self._save_path = save_path
+        return self._save_path
+
+    def logs_path(self):
+        '''
+        Initializes the path to save logging files
+        Args:
+            None
+        Returns:
+            None
+        '''
+        if self._logs_path is None:
+            logs_path = '%s/logs' % self._path
+            os.makedirs(logs_path, exist_ok=True)
+            self._logs_path = logs_path
+        return self._logs_path
+
+    def _initialize_session(self):
+        '''
+        Initializes the TensorFlow session and all variables
+        Args:
+            None
+        Returns:
+            None
+        '''
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        self.sess = tf.Session(graph=self.graph, config=config)
+
+        self.sess.run(self.global_variables_initializer)
+        self.summary_writer = tf.summary.FileWriter(self.logs_path, graph=self.graph)
+
+    def _define_inputs(self):
+        '''
+        Initializes the placeholder Tensors used for constructing the computational graph, the model endpoints, and important parameters
+        Args:
+            None
+        Returns:
+            None
+        '''
+        if self.input_shape == None:
+            self.input_shape = [None, 3, 224, 224] # use ImageNet defaults
+
+        self.images = tf.placeholder(
+            tf.float32,
+            shape=self.input_shape,
+            name='input_images')
+        self.labels = tf.placeholder(
+            tf.float32,
+            shape=[None, self.n_classes],
+            name='labels')
+        self.learning_rate = tf.placeholder(
+            tf.float32,
+            shape=[],
+            name='learning_rate')
+        self.is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
+
+    def build(self, weight_dict):
+        '''
+
+        Takes in a dictionary containing the weights of the model and builds the computational graph of the TensorFlow model
+
+        Args:
+            weight_dict: a dictionary containing the weights for the model
+
+        Returns:
+            output: the output of the placeholder input Tensor of the model
+        '''
+        output = self.images
+
+        for i, layer_attr in enumerate(self.net_config):
+            # get the ith weight in the weight dictionary
+            weight = weight_dict[list(weight_dict.keys())[i]]
+
+            # pass the input through the next layer, adding it to the tf.Graph (hopefully)
+
+            output = create_tf_layer_from_name(output, layer_attr, weight)
+
+        return output
 
 
 
