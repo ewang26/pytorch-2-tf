@@ -79,6 +79,76 @@ def model_arch_conversion(arch_string, out_path='~/.pytorch2tf'):
                         'eps': module.eps,
                     })
 
+        elif isinstance(module, nn.PairwiseDistance):
+            model_arch_list.append({
+                        'name': module.__class__.__name__,
+                        'dim': module.dim,
+                        'eps': module.eps,
+            })
+
+        # loss
+
+        elif isinstance(module, nn.L1Loss):
+            model_arch_list.append({
+                        'name': module.__class__.__name__,
+                        'size_average': module.size_average,
+                        'reduce': module.reduce,
+                        'reduction': module.reduction,
+                    })
+
+        elif isinstance(module, nn.MSELoss):
+            model_arch_list.append({
+                        'name': module.__class__.__name__,
+                        'size_average': module.size_average,
+                        'reduce': module.reduce,
+                        'reduction': module.reduction,
+                    })
+
+        elif isinstance(module, nn.SmoothL1Loss):
+            model_arch_list.append({
+                        'name': module.__class__.__name__,
+                        'margin': module.margin,
+                        'reduce': module.reduce,
+                        'reduction': module.reduction,
+                        'beta': module.beta,
+                    })
+
+        elif isinstance(module, nn.MultiMarginLoss):
+            model_arch_list.append({
+                        'name': module.__class__.__name__,
+                        'margin': module.margin,
+                        'weight': module.weight,
+                        'size_average': module.size_average,
+                        'reduce': module.reduce,
+                        'reduction': module.reduction,
+                    })
+
+        elif isinstance(module, nn.MarginRankingLoss):
+            model_arch_list.append({
+                        'name': module.__class__.__name__,
+                        'margin': module.size_average,
+                        'reduce': module.reduce,
+                        'reduction': module.reduction,
+                    })
+
+        # vision
+
+        elif isinstance(module, nn.PixelShuffle):
+            model_arch_list.append({
+                        'name': module.__class__.__name__,
+                        'upscale_factor': module.upscale_factor,
+                    })
+
+        # shuffle
+
+        elif isinstance(module, nn.ChannelShuffle):
+            model_arch_list.append({
+                        'name': module.__class__.__name__,
+                        'groups': module.groups,
+                    })
+
+
+
         else:
             return NotImplementedError('A module within your model is not supported.')
 
